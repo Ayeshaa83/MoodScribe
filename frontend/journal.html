@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Write your daily journal entry and let AI detect your emotions.">
+    <title>MoodScribe — Journal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="app-page">
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-brand" onclick="window.location.href='journal.html'">
+            <div class="brand-icon-sm">
+                <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
+                    <circle cx="20" cy="20" r="18" stroke="url(#navGrad)" stroke-width="2.5" fill="none" />
+                    <path d="M13 22c0 0 2.5 5 7 5s7-5 7-5" stroke="url(#navGrad)" stroke-width="2"
+                        stroke-linecap="round" />
+                    <circle cx="15" cy="16" r="1.5" fill="#6366F1" />
+                    <circle cx="25" cy="16" r="1.5" fill="#6366F1" />
+                    <defs>
+                        <linearGradient id="navGrad" x1="0" y1="0" x2="40" y2="40">
+                            <stop offset="0%" stop-color="#6366F1" />
+                            <stop offset="100%" stop-color="#EC4899" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            <span class="nav-title">MoodScribe</span>
+        </div>
+        <div class="nav-links">
+            <a href="journal.html" class="nav-link active" id="navJournal">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                </svg>
+                Journal
+            </a>
+            <a href="dashboard.html" class="nav-link" id="navDashboard">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+                Dashboard
+            </a>
+            <button class="nav-link btn-logout" onclick="logout()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+                Logout
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="journal-main">
+        <div class="journal-container">
+            <!-- Greeting -->
+            <div class="greeting-section fade-in">
+                <h1 class="greeting-text">How are you feeling today?</h1>
+                <p class="greeting-sub" id="greetingSub">Take a moment to reflect on your day…</p>
+            </div>
+
+            <!-- Journal Input Card -->
+            <div class="journal-card fade-in delay-1">
+                <div class="journal-card-header">
+                    <h2>Write Your Entry</h2>
+                    <span class="date-badge" id="todayDate"></span>
+                </div>
+
+                <div class="textarea-wrapper">
+                    <textarea id="journalText" class="journal-textarea"
+                        placeholder="Today I feel… &#10;&#10;Write freely about your thoughts, feelings, and experiences. Don't hold back — this is your safe space. 💭"
+                        rows="8"></textarea>
+                    <div class="textarea-footer">
+                        <span class="word-count" id="wordCount">0 words</span>
+                        <button class="mic-btn" id="micBtn" title="Speak your thoughts" onclick="toggleSpeech()">
+                            <svg id="micIcon" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                <line x1="12" y1="19" x2="12" y2="23" />
+                                <line x1="8" y1="23" x2="16" y2="23" />
+                            </svg>
+                            <div class="mic-pulse" id="micPulse" style="display:none"></div>
+                        </button>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary btn-submit" id="submitBtn" onclick="submitJournal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 2L11 13" />
+                        <path d="M22 2l-7 20-4-9-9-4 20-7z" />
+                    </svg>
+                    <span class="btn-text">Analyze My Mood</span>
+                    <div class="btn-spinner" style="display:none"></div>
+                </button>
+            </div>
+
+            <!-- Result Card (hidden by default) -->
+            <div class="result-card fade-in" id="resultCard" style="display:none">
+                <div class="result-header">
+                    <span class="result-emoji" id="resultEmoji"></span>
+                    <div>
+                        <h3 class="result-emotion" id="resultEmotion"></h3>
+                        <p class="result-label">Detected Emotion</p>
+                    </div>
+                </div>
+
+                <div class="confidence-section">
+                    <div class="confidence-label">
+                        <span>Confidence</span>
+                        <span id="confidenceValue" class="confidence-value"></span>
+                    </div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="confidenceFill"></div>
+                    </div>
+                </div>
+
+                <!-- Chunk breakdown (collapsible) -->
+                <details class="chunk-details" id="chunkDetails">
+                    <summary class="chunk-summary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                        </svg>
+                        Chunk-Level Analysis
+                    </summary>
+                    <div class="chunk-list" id="chunkList"></div>
+                </details>
+
+                <button class="btn btn-outline btn-new-entry" onclick="newEntry()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    Write Another Entry
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script src="script.js"></script>
+    <script>
+        // ─── Auth Guard ─────────────────────────────────────────────
+        (async () => {
+            const { data } = await supabaseClient.auth.getSession();
+            if (!data.session) {
+                window.location.href = "index.html";
+                return;
+            }
+            initJournalPage();
+        })();
+
+        // ─── Journal Page Init ──────────────────────────────────────
+        function initJournalPage() {
+            // Set today's date
+            const now = new Date();
+            const options = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
+            document.getElementById("todayDate").textContent = now.toLocaleDateString("en-US", options);
+
+            // Set greeting based on time
+            const hour = now.getHours();
+            let greeting;
+            if (hour < 12) greeting = "Good morning! ☀️";
+            else if (hour < 17) greeting = "Good afternoon! 🌤️";
+            else if (hour < 21) greeting = "Good evening! 🌅";
+            else greeting = "Good night! 🌙";
+            document.getElementById("greetingSub").textContent = greeting + " Take a moment to reflect on your day…";
+
+            // Word count
+            document.getElementById("journalText").addEventListener("input", (e) => {
+                const words = e.target.value.trim().split(/\s+/).filter(Boolean).length;
+                document.getElementById("wordCount").textContent = words + " word" + (words !== 1 ? "s" : "");
+            });
+        }
+
+        // ─── Speech ─────────────────────────────────────────────────
+        let recognition = null;
+        let isListening = false;
+
+        function toggleSpeech() {
+            if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
+                showToast("Speech recognition is not supported in your browser.", "error");
+                return;
+            }
+
+            if (isListening) {
+                recognition.stop();
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = "en-US";
+            recognition.interimResults = true;
+            recognition.continuous = true;
+
+            const textarea = document.getElementById("journalText");
+            const micBtn = document.getElementById("micBtn");
+            const micPulse = document.getElementById("micPulse");
+
+            recognition.onstart = () => {
+                isListening = true;
+                micBtn.classList.add("listening");
+                micPulse.style.display = "block";
+                showToast("🎤 Listening… Speak now!", "info");
+            };
+
+            recognition.onresult = (event) => {
+                let transcript = "";
+                for (let i = 0; i < event.results.length; i++) {
+                    transcript += event.results[i][0].transcript;
+                }
+                textarea.value = transcript;
+                textarea.dispatchEvent(new Event("input"));
+            };
+
+            recognition.onend = () => {
+                isListening = false;
+                micBtn.classList.remove("listening");
+                micPulse.style.display = "none";
+            };
+
+            recognition.onerror = (event) => {
+                isListening = false;
+                micBtn.classList.remove("listening");
+                micPulse.style.display = "none";
+                showToast("Speech error: " + event.error, "error");
+            };
+
+            recognition.start();
+        }
+
+        // ─── Submit Journal ─────────────────────────────────────────
+        async function submitJournal() {
+            const text = document.getElementById("journalText").value.trim();
+            if (!text) {
+                showToast("Please write something first!", "error");
+                return;
+            }
+
+            const btn = document.getElementById("submitBtn");
+            const spinner = btn.querySelector(".btn-spinner");
+            const btnText = btn.querySelector(".btn-text");
+            btnText.style.display = "none";
+            spinner.style.display = "inline-block";
+            btn.disabled = true;
+
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (!session) {
+                    window.location.href = "index.html";
+                    return;
+                }
+
+                const response = await fetch("/api/predict", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + session.access_token,
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        user_id: session.user.id,
+                    }),
+                });
+
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "Prediction failed");
+
+                displayResult(result);
+                showToast("Emotion detected successfully! ✨", "success");
+            } catch (err) {
+                showToast(err.message || "Something went wrong.", "error");
+            } finally {
+                btnText.style.display = "inline";
+                spinner.style.display = "none";
+                btn.disabled = false;
+            }
+        }
+
+        // ─── Display Result ─────────────────────────────────────────
+        function displayResult(result) {
+            const card = document.getElementById("resultCard");
+            card.style.display = "block";
+            card.classList.add("result-animate");
+
+            document.getElementById("resultEmoji").textContent = EMOTION_EMOJIS[result.emotion] || "🔮";
+            document.getElementById("resultEmotion").textContent = result.emotion.charAt(0).toUpperCase() + result.emotion.slice(1);
+
+            const conf = Math.round(result.confidence * 100);
+            document.getElementById("confidenceValue").textContent = conf + "%";
+            const fill = document.getElementById("confidenceFill");
+            fill.style.width = "0%";
+            fill.className = "confidence-fill emotion-bg-" + result.emotion;
+            setTimeout(() => fill.style.width = conf + "%", 100);
+
+            // Chunk details
+            const chunkList = document.getElementById("chunkList");
+            chunkList.innerHTML = "";
+            if (result.chunk_emotions && result.chunk_emotions.length > 1) {
+                document.getElementById("chunkDetails").style.display = "block";
+                result.chunk_emotions.forEach((chunk, i) => {
+                    const div = document.createElement("div");
+                    div.className = "chunk-item";
+                    div.innerHTML = `
+                        <div class="chunk-header">
+                            <span class="chunk-num">Chunk ${i + 1}</span>
+                            <span class="chunk-emotion">
+                                ${EMOTION_EMOJIS[chunk.emotion] || "🔮"} ${chunk.emotion}
+                                <span class="chunk-conf">${Math.round(chunk.confidence * 100)}%</span>
+                            </span>
+                        </div>
+                        <p class="chunk-text">"${chunk.text}"</p>
+                    `;
+                    chunkList.appendChild(div);
+                });
+            } else {
+                document.getElementById("chunkDetails").style.display = "none";
+            }
+
+            // Scroll to result
+            card.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+
+        function newEntry() {
+            document.getElementById("journalText").value = "";
+            document.getElementById("wordCount").textContent = "0 words";
+            document.getElementById("resultCard").style.display = "none";
+            document.getElementById("journalText").focus();
+        }
+    </script>
+</body>
+
+</html>
