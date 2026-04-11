@@ -1,0 +1,8 @@
+.git
+.gitignore
+__pycache__/
+*.pyc
+node_modules/
+.DS_Store
+backend/debug_output.txt
+backend/debug_model.py
