@@ -5,4 +5,5 @@ numpy
 supabase
 python-dotenv
 emoji
-pickle5
+transformers
+torch

@@ -13,12 +13,14 @@ from datetime import datetime, timedelta, timezone
 
 import emoji
 import numpy as np
+import torch
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 
@@ -27,27 +29,44 @@ load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-MODEL_PATH   = os.path.join(os.path.dirname(__file__), "model", "emotion_model.h5")
-TOKENIZER_PATH = os.path.join(os.path.dirname(__file__), "model", "tokenizer.pkl")
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
 
+CHATBOT_PATH       = os.path.join(MODELS_DIR, "dialogpt_model")
+EMOTION_MODEL_PATH = os.path.join(MODELS_DIR, "emotion_model.h5")
+EMOTION_TOKEN_PATH = os.path.join(MODELS_DIR, "emotion_tokenizer.pkl")
+
+# Note: Using hardcoded MAX_LEN as the training files imply 50.
+MAX_LEN = 50 
 EMOTIONS = ["sadness", "joy", "love", "anger", "fear", "surprise"]
-MAX_LEN  = 50          # must match training maxlen (from model input shape)
 
 # ─── Init Flask ──────────────────────────────────────────────────────────────
 
 app = Flask(__name__, static_folder="../frontend", static_url_path="")
 CORS(app, supports_credentials=True)
 
-# ─── Load ML Model & Tokenizer ──────────────────────────────────────────────
+# ─── Load ML Models ──────────────────────────────────────────────────────────
 
-print("⏳  Loading emotion model …")
-model = load_model(MODEL_PATH)
-print("✅  Model loaded.")
+print("Loading DialoGPT chatbot model...")
+try:
+    tokenizer_chat = AutoTokenizer.from_pretrained(CHATBOT_PATH)
+    model_chat = AutoModelForCausalLM.from_pretrained(CHATBOT_PATH)
+    tokenizer_chat.pad_token = tokenizer_chat.eos_token
+    device = "cpu"
+    model_chat = model_chat.to(device)
+    print("DialoGPT loaded successfully.")
+except Exception as e:
+    print(f"Error loading DialoGPT: {e}")
+    model_chat = None
 
-print("⏳  Loading tokenizer …")
-with open(TOKENIZER_PATH, "rb") as f:
-    tokenizer = pickle.load(f)
-print("✅  Tokenizer loaded.")
+print("Loading emotion detection model...")
+try:
+    emotion_model = load_model(EMOTION_MODEL_PATH)
+    with open(EMOTION_TOKEN_PATH, "rb") as f:
+        tokenizer_emotion = pickle.load(f)
+    print("Emotion model loaded.")
+except Exception as e:
+    print(f"Error loading emotion model: {e}")
+    emotion_model = None
 
 # ─── Supabase Client ────────────────────────────────────────────────────────
 
@@ -167,11 +186,15 @@ def predict_emotion(text: str):
     chunk_emotions = []
 
     for chunk in chunks:
-        seq = tokenizer.texts_to_sequences([chunk])
+        seq = tokenizer_emotion.texts_to_sequences([chunk])
         pad = pad_sequences(seq, maxlen=MAX_LEN, padding="pre", truncating="pre")
-        pred = model.predict(pad, verbose=0)[0]          # shape (6,)
+        
+        # Prediction
+        pred = emotion_model.predict(pad, verbose=0)[0]
+        
         idx  = int(np.argmax(pred))
         conf = float(pred[idx])
+        
         chunk_emotions.append({
             "text": chunk,
             "emotion": EMOTIONS[idx],
@@ -199,6 +222,51 @@ def predict_emotion(text: str):
         "confidence": final_confidence,
         "chunk_emotions": chunk_emotions,
     }
+
+
+# ─── Chatbot Logic ──────────────────────────────────────────────────────────
+
+def chatbot_inference(input_text: str) -> str:
+    """Generate a response using the DialoGPT model."""
+    if not model_chat or not tokenizer_chat:
+        return "I'm sorry, I'm having trouble thinking right now."
+
+    try:
+        # Tokenize input
+        new_user_input_ids = tokenizer_chat.encode(input_text + tokenizer_chat.eos_token, return_tensors='pt')
+
+        # Generate output (sampling for more natural conversation)
+        chat_history_ids = model_chat.generate(
+            new_user_input_ids, 
+            max_length=1000, 
+            pad_token_id=tokenizer_chat.eos_token_id,
+            do_sample=True, 
+            top_k=50, 
+            top_p=0.95,
+            no_repeat_ngram_size=3
+        )
+
+        # Decode response (skip input tokens)
+        response = tokenizer_chat.decode(chat_history_ids[:, new_user_input_ids.shape[-1]:][0], skip_special_tokens=True)
+        
+        if not response.strip():
+            return "I hear you. Tell me more about that."
+            
+        return response
+    except Exception as e:
+        print(f"Inference error: {e}")
+        return "I'm here to listen. Go on."
+
+
+def enhance_response(reply: str, emotion: str) -> str:
+    """Modify the chatbot response based on the detected emotion."""
+    if emotion == "sadness":
+        return f"I'm here for you. {reply} Remember that you are not alone."
+    elif emotion == "joy":
+        return f"That's great! {reply} I'm so happy to hear that!"
+    elif emotion == "anger":
+        return f"I understand you're upset. {reply} Maybe taking a deep breath could help?"
+    return reply
 
 
 # ─── Supabase helper: create user-scoped client ─────────────────────────────
@@ -263,7 +331,7 @@ def api_predict():
             "confidence": result["confidence"],
         }).execute()
     except Exception as e:
-        print(f"⚠️  DB insert error: {e}")
+        print(f"DB insert error: {e}")
         # Still return the prediction even if storage fails
         result["db_warning"] = str(e)
 
@@ -400,12 +468,17 @@ def api_insights():
     weekly_top = max(weekly_emotions, key=lambda k: (weekly_emotions[k], weekly_confidence[k])) if weekly_emotions else None
     weekly_summary = f"You have been mostly feeling {weekly_top} this week." if weekly_top else None
 
-    # ── Most emotional day ────────────────────────────────────────────────
-    day_confidence = {}
+    # ── Most emotional day (Average Intensity) ────────────────────────────
+    day_stats = {}
     for e in entries:
         day = e["created_at"][:10]
-        day_confidence[day] = day_confidence.get(day, 0) + e.get("confidence", 0)
-    most_emotional_day = max(day_confidence, key=day_confidence.get) if day_confidence else None
+        if day not in day_stats:
+            day_stats[day] = {"sum": 0, "count": 0}
+        day_stats[day]["sum"] += e.get("confidence", 0)
+        day_stats[day]["count"] += 1
+    
+    day_averages = {day: (s["sum"] / s["count"]) for day, s in day_stats.items()}
+    most_emotional_day = max(day_averages, key=day_averages.get) if day_averages else None
 
     return jsonify({
         "total_entries": len(entries),
@@ -419,6 +492,76 @@ def api_insights():
         "weekly_summary": weekly_summary,
         "most_emotional_day": most_emotional_day,
     }), 200
+
+
+# ─── POST /api/chat ──────────────────────────────────────────────────────────
+
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    """Handle chat messages with emotion awareness."""
+    data = request.get_json(silent=True)
+    if not data or not data.get("message"):
+        return jsonify({"error": "Missing 'message' field"}), 400
+
+    message = data["message"].strip()
+    user_id = data.get("user_id")
+    token   = extract_token(request)
+
+    if not user_id or not token:
+        return jsonify({"error": "Authentication required"}), 401
+
+    # 1. Detect Emotion
+    emotion_result = predict_emotion(message)
+    detected_emotion = emotion_result["emotion"]
+
+    # 2. Generate Chatbot Response
+    base_reply = chatbot_inference(message)
+
+    # 3. Apply Emotion-Aware Adjustment
+    final_reply = enhance_response(base_reply, detected_emotion)
+
+    # 4. Store in Supabase (Optional but requested)
+    try:
+        user_client = get_user_client(token)
+        user_client.table("chat_history").insert({
+            "user_id": user_id,
+            "message": message,
+            "emotion": detected_emotion,
+            "reply":   final_reply
+        }).execute()
+    except Exception as e:
+        print(f"Chat DB insert error: {e}")
+
+    return jsonify({
+        "emotion": detected_emotion,
+        "reply":   final_reply
+    }), 200
+
+
+# ─── GET /api/chat/history ───────────────────────────────────────────────────
+
+@app.route("/api/chat/history", methods=["GET"])
+def api_chat_history():
+    """Fetch chat history for the authenticated user."""
+    token   = extract_token(request)
+    user_id = request.args.get("user_id")
+
+    if not user_id or not token:
+        return jsonify({"error": "Authentication required"}), 401
+
+    try:
+        user_client = get_user_client(token)
+        resp = (
+            user_client
+            .table("chat_history")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        return jsonify(resp.data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

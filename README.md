@@ -9,6 +9,7 @@ MoodScribe is an AI-powered emotional journaling application that tracks your me
 - **Secure Authentication & Storage**: Powered securely by Supabase for user authentication and Postgres database storage.
 - **Toggle Privacy**: Secure login/signup system with password visibility toggles.
 - **Entry Management**: Click to view full expanded entries via stylish modals, or permanently delete specific journal entries.
+- **AI Chatbot Assistant**: An emotion-aware chatbot (powered by DialoGPT) that provides supportive, contextually relevant responses based on your current mood.
 
 ## 🛠️ Technology Stack
 - **Frontend**: Vanilla HTML5, CSS3 (with custom variables, modern gradients, & glassmorphism), JavaScript
@@ -59,14 +60,30 @@ SUPABASE_URL=your_supabase_project_url
 SUPABASE_KEY=your_supabase_anon_key
 ```
 
-### 4. Installation
+### 4. Model Setup (Required)
+The AI model weights are excluded from this repository due to their size. You must place the following files in the `backend/models/` directory manually:
+1.  **Emotion Model**: `emotion_model.h5` and `emotion_tokenizer.pkl`
+2.  **Chatbot Model**: A folder named `dialogpt_model/` containing the `config.json`, `tokenizer.json`, and `model.safetensors` files.
+
+Ensure your `backend/models/` structure looks like this:
+```text
+backend/models/
+├── emotion_model.h5
+├── emotion_tokenizer.pkl
+└── dialogpt_model/
+    ├── config.json
+    ├── model.safetensors
+    └── ...
+```
+
+### 5. Installation
 Install all backend dependencies via pip:
 ```bash
 cd backend
 pip install -r requirements.txt
 ```
 
-### 5. Running the App
+### 6. Running the App
 Start the Flask development server:
 ```bash
 python app.py
